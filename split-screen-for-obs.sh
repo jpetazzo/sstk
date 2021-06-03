@@ -56,10 +56,30 @@ move_workspace() {
   i3-msg "workspace $WORKSPACE; move workspace to output $OUTPUT"
 }
 
-if xrandr -q | grep -qw ^HDMI-0; then
+# Let's check if there is a 4K monitor to the right.
+# (i.e. positioned at (3840,0))
+OUTPUT=$(xrandr -q | grep 3840x2160+3840+0 | cut -d" " -f1)
+if [ "$OUTPUT" ]; then
+  W_OFFSET=$((3*1920))
+  TOP_OUTPUT=none
+  BOTTOM_OUTPUT=none
+  do_the_thing
+
+  # Assign the left half of the screen too
+  xrandr --delmonitor LEFT || true
+  xrandr --setmonitor LEFT \
+    ${W_PX}/${W_MM}x$((2*${H_PX}))/$((2*${H_MM}))+$((2*1920))+0 $OUTPUT
+
+  for WS in 1 2 3 4; do move_workspace $WS TOP; done
+  exit 0
+fi
+
+# Let's check if we have a 1920x2160 main screen.
+# If so, split it top and bottom.
+OUTPUT=$(xrandr -q | grep 1920x2160+0+0 | cut -d" " -f1)
+if [ "$OUTPUT" ]; then
   # When I have an output named HDMI-0, I'm with a single display,
   # in PBP, with 1920x2160 resolution. Split it top and bottom.
-  OUTPUT=HDMI-0
   W_OFFSET=0
   TOP_OUTPUT=$OUTPUT
   BOTTOM_OUTPUT=none
@@ -73,22 +93,7 @@ if xrandr -q | grep -qw ^HDMI-0; then
   # compose key. It looks like I only need to do it once, and it
   # sticks when reconnecting.
   setxkbmap -option ralt:compose
+  exit 0
 fi
 
-if xrandr -q | grep -qw ^HDMI-A-1; then
-  # When I have an output named HDMI-A-1, I'm with two 4k monitors,
-  # and I want to split the one on the right.
-  OUTPUT=HDMI-A-1
-  W_OFFSET=$((3*1920))
-  TOP_OUTPUT=none
-  BOTTOM_OUTPUT=none
-  do_the_thing
-
-  # Assign the left half of the screen too
-  xrandr --delmonitor LEFT || true
-  xrandr --setmonitor LEFT \
-    ${W_PX}/${W_MM}x$((2*${H_PX}))/$((2*${H_MM}))+$((2*1920))+0 $OUTPUT
-
-  for WS in 1 2 3 4; do move_workspace $WS TOP; done
-fi
-
+echo "Could not find any recognized monitor arrangement. Sorry."
