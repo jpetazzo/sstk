@@ -5,25 +5,33 @@ APP=live
 MONITOR=udp://127.0.0.1:1234
 #MONITOR=udp://10.0.0.16:1234
 
-# Software encoding
-#CODEC="-c:v libx264 -preset medium -tune:v zerolatency -profile:v baseline"
+# Default to software encoding
+# This one should reduce latency (no B-frames etc) and make the job easier on the decoder, too
+CODEC="-c:v libx264 -preset medium -tune:v zerolatency -profile:v baseline"
+# But this one would yield higher quality (at the expense of a bit more latency and CPU usage)
 #CODEC="-c:v libx264 -preset medium -profile:v main"
 
-# Old version of NVENC
-#CODEC="-c:v h264_nvenc -preset ll -profile:v baseline -rc cbr_ld_hq"
+# If we detect an AMD GPU, use AMF (Advanced Media Framework)
+if lspci | grep -qw Renoir; then
+  CODEC="-c:v h264_amf -quality 2 -rc cbr"
+  # Another option:
+  #CODEC="-c:v h264_amf -profile:v 256 -quality 2 -rc cbr"
+  # For reference:
+  # -profile:v 256 = constrained_baseline
+  # -quality 2 = prefer quality over speed
+fi
 
-# New (2021ish) version of NVENC
-CODEC="
-  -c:v   h264_nvenc -tune ll -profile:v baseline -rc cbr
-  -c:v:4 h264_nvenc -preset:v:4 p4 -profile:v:4 high -rc:v:4 vbr -cq:v:4 36
-  "
-
-# AMF (Advanced Media Framework), AMD's encoder
-#CODEC="-c:v h264_amf -profile:v 256 -quality 2 -rc cbr"
-#                               ^          ^
-#                               |          |
-#            constrained_baseline     prefer quality
-#                                      over speed
+# If we detect an NVIDIA GPU, use NVENC
+if lspci | grep -qw NVIDIA; then
+  # Old version of NVENC
+  # (Here for reference version only; not used anymore in recent SDKs)
+  #CODEC="-c:v h264_nvenc -preset ll -profile:v baseline -rc cbr_ld_hq"
+  # New (2021ish) version of NVENC
+  CODEC="
+    -c:v   h264_nvenc -tune ll -profile:v baseline -rc cbr
+    -c:v:4 h264_nvenc -preset:v:4 p4 -profile:v:4 high -rc:v:4 vbr -cq:v:4 36
+    "
+fi
 
 FPS=30
 
@@ -61,7 +69,31 @@ INPUT="
 	-thread_queue_size 1024 $VIDEO_INPUT
 	"
 
-#INPUT="$INPUT_LOOP"
+if [ "$1" ]; then
+  MODE=$1
+else
+  DEFAULT=R
+  echo "Please specify mode of operation:"
+  echo "[C] Sound Check"
+  echo "[R] Stream with recording"
+  echo "[T] Stream Test (without recording)"
+  echo "(Or press ENTER for default mode, which is [$DEFAULT])"
+  read CHOICE
+  [ "$CHOICE" = "" ] && CHOICE=$DEFAULT
+  case $CHOICE in
+  C) MODE=sound-check;;
+  R) MODE=stream-with-recording;;
+  T) MODE=stream-without-recording;;
+  *) MODE=$CHOICE;;
+  esac
+fi
+
+case $MODE in
+  sound-check) ;;
+  stream-with-recording) ;;
+  stream-without-recording) ;;
+  *) echo "Unsupported mode ($MODE)."; exit 1;;
+esac
 
 STREAM_1=stream1
 STREAM_2=stream2
@@ -87,7 +119,7 @@ ENCODE_VIDEO="
 
 OUTPUT="-f tee -flags +global_header"
 OUTPUT="$OUTPUT [f=mpegts:select=\'v:0\']$MONITOR"
-if [ "$1" = "stream-camera-and-record" ]; then
+if [ "$MODE" = "stream-with-recording" ]; then
 	mkdir -p recordings
 	FILENAME=recordings/$(date +%Y-%m-%d_%H:%M:%S).mkv
 	OUTPUT="$OUTPUT|[select=\'a:0,v:4\']$FILENAME"
@@ -105,24 +137,30 @@ FFMPEG="ffmpeg
 	$OUTPUT
 	"
 
-case "$1" in
+echo "$FFMPEG"
+
+case "$MODE" in
 	sound-check)
 		ffplay $AUDIO_INPUT
+                FFRET=$?
 		;;
-	stream-camera-and-record)
+	stream-with-recording)
 		xset s off
 		xset -dpms
 		$FFMPEG
+                FFRET=$?
 		xset s on
 		xset +dpms
 		;;
-	stream-test-without-recording)
+	stream-without-recording)
 		$FFMPEG
-		;;
-	*)
-		echo "Please specify 'sound-check' or 'stream-camera-and-record' or 'stream-test-without-recording'."
-		echo "If device is open by pulseaudio, here is how to free it:"
-		echo "pacmd list-modules | grep -B 2 -e $AUDIO_INPUT_NAME"
-		echo "pacmd unload-module XX # use number shown above"
+                FFRET=$?
 		;;
 esac
+
+if [ "$FFRET" != "0" ]; then
+  echo "It looks like there was an error."
+  echo "Hint: if the audio device is held by pulseaudio, here is how to free it:"
+  echo "pacmd list-modules | grep -B 2 -e $AUDIO_INPUT_NAME"
+  echo "pacmd unload-module XX # use number shown above"
+fi
