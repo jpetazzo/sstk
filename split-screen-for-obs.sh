@@ -53,6 +53,7 @@ do_the_thing() {
 move_workspace() {
   WORKSPACE=$1
   OUTPUT=$2
+  echo "Moving workspace $WORKSPACE to output $OUTPUT."
   i3-msg "workspace $WORKSPACE; move workspace to output $OUTPUT"
 }
 
@@ -60,17 +61,23 @@ move_workspace() {
 # (i.e. positioned at (3840,0))
 OUTPUT=$(xrandr -q | grep 3840x2160+3840+0 | cut -d" " -f1)
 if [ "$OUTPUT" ]; then
+  echo "Detected 4K monitor positioned on the right (output=$OUTPUT)."
   W_OFFSET=$((3*1920))
   TOP_OUTPUT=none
   BOTTOM_OUTPUT=none
   do_the_thing
 
   # Assign the left half of the screen too
-  xrandr --delmonitor LEFT || true
-  xrandr --setmonitor LEFT \
+  xrandr --delmonitor LEFTHALF || true
+  xrandr --setmonitor LEFTHALF \
     ${W_PX}/${W_MM}x$((2*${H_PX}))/$((2*${H_MM}))+$((2*1920))+0 $OUTPUT
 
+  # Figure out the name of the "main" output (the one at +0+).
+  MAIN=$(xrandr -q | grep 3840x2160+0+0 | cut -d" " -f1)
   for WS in 1 2 3 4; do move_workspace $WS TOP; done
+  [ "$MAIN" ] && for WS in 5 6 7 9 10; do move_workspace $WS $MAIN; done
+  for WS in 8; do move_workspace $WS LEFTHALF; done
+  for WS in 11; do move_workspace $WS BOTTOM; done
   exit 0
 fi
 
@@ -78,15 +85,14 @@ fi
 # If so, split it top and bottom.
 OUTPUT=$(xrandr -q | grep 1920x2160+0+0 | cut -d" " -f1)
 if [ "$OUTPUT" ]; then
-  # When I have an output named HDMI-0, I'm with a single display,
-  # in PBP, with 1920x2160 resolution. Split it top and bottom.
+  echo "Detected 2K*2K main monitor (output=$OUTPUT). Splitting it top and bottom."
   W_OFFSET=0
   TOP_OUTPUT=$OUTPUT
   BOTTOM_OUTPUT=none
   do_the_thing
 
   for WS in 1 2 3 4; do move_workspace $WS TOP; done
-  for WS in 5 6 7 8 9 10; do move_workspace $WS BOTTOM; done
+  for WS in 5 6 7 8 9 10 11; do move_workspace $WS BOTTOM; done
 
   # This is unrelated to screen splitting, but it is seems to be
   # necessary for my VNC client (remmina) to correctly pass the
