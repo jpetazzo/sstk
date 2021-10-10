@@ -1,6 +1,13 @@
 #!/bin/sh
 
-SERVER=eu.container.training
+if [ "$1" = "" ]; then
+  echo "Please specify ingest server (e.g. highfive.container.training) as first argument."
+  exit 1
+fi
+
+SERVER1=$1
+shift
+#SERVER2=dev.container.training
 APP=live
 MONITOR=udp://127.0.0.1:1234
 #MONITOR=udp://10.0.0.16:1234
@@ -58,7 +65,7 @@ AUDIO_INPUT_ALSA_DEFAULT="-f alsa -i default"
 
 VIDEO_INPUT_OBS="-f v4l2 -frame_size 1920x1080 -framerate $FPS -i /dev/video8"
 VIDEO_INPUT_TEST="-re -f lavfi -i testsrc=size=hd1080:rate=30:decimals=1"
-INPUT_LOOP="-re -fflags +genpts -stream_loop -1 -i Downloads/streamingtest.mkv"
+INPUT_LOOP="-re -fflags +genpts -stream_loop -1 -i loop.mkv"
 VIDEO_INPUT_CLOCK="-re -f lavfi -i color=color=white:s=hd1080:r=30[white];movie=CLOCK.JPG,scale=hd1080:force_original_aspect_ratio=decrease[img];[white][img]overlay,drawtext=text=%{localtime}:fontcolor=black:x=w-text_w-96:y=(h-text_h)/2:fontsize=48,drawtext=text=Playing→:fontcolor=black:x=w-text_w-32:y=h-3*text_h-32:fontsize=32,drawtext=textfile=title.txt:fontcolor=black:x=w-text_w-32:y=h-text_h-32:fontsize=32'"
 
 AUDIO_INPUT="$AUDIO_INPUT_ALSA"
@@ -69,14 +76,16 @@ INPUT="
 	-thread_queue_size 1024 $VIDEO_INPUT
 	"
 
+#INPUT="$INPUT_LOOP"
+
 if [ "$1" ]; then
   MODE=$1
 else
   DEFAULT=R
   echo "Please specify mode of operation:"
-  echo "[C] Sound Check"
-  echo "[R] Stream with recording"
-  echo "[T] Stream Test (without recording)"
+  echo "[C] sound-check"
+  echo "[R] stream-with-recording"
+  echo "[T] stream-without-recording"
   echo "(Or press ENTER for default mode, which is [$DEFAULT])"
   read CHOICE
   [ "$CHOICE" = "" ] && CHOICE=$DEFAULT
@@ -124,10 +133,16 @@ if [ "$MODE" = "stream-with-recording" ]; then
 	FILENAME=recordings/$(date +%Y-%m-%d_%H:%M:%S).mkv
 	OUTPUT="$OUTPUT|[select=\'a:0,v:4\']$FILENAME"
 fi
-OUTPUT="$OUTPUT|[f=flv:select=\'a:0,v:0\']rtmp://$SERVER/$APP/$STREAM_1"
-OUTPUT="$OUTPUT|[f=flv:select=\'a:0,v:1\']rtmp://$SERVER/$APP/$STREAM_2"
-OUTPUT="$OUTPUT|[f=flv:select=\'a:1,v:2\']rtmp://$SERVER/$APP/$STREAM_3"
-OUTPUT="$OUTPUT|[f=flv:select=\'a:2,v:3\']rtmp://$SERVER/$APP/$STREAM_4"
+OUTPUT="$OUTPUT|[f=flv:select=\'a:0,v:0\']rtmp://$SERVER1/$APP/$STREAM_1"
+OUTPUT="$OUTPUT|[f=flv:select=\'a:0,v:1\']rtmp://$SERVER1/$APP/$STREAM_2"
+OUTPUT="$OUTPUT|[f=flv:select=\'a:1,v:2\']rtmp://$SERVER1/$APP/$STREAM_3"
+OUTPUT="$OUTPUT|[f=flv:select=\'a:2,v:3\']rtmp://$SERVER1/$APP/$STREAM_4"
+if [ "$SERVER2" ]; then
+	OUTPUT="$OUTPUT|[f=flv:select=\'a:0,v:0\']rtmp://$SERVER2/$APP/$STREAM_1"
+	OUTPUT="$OUTPUT|[f=flv:select=\'a:0,v:1\']rtmp://$SERVER2/$APP/$STREAM_2"
+	OUTPUT="$OUTPUT|[f=flv:select=\'a:1,v:2\']rtmp://$SERVER2/$APP/$STREAM_3"
+	OUTPUT="$OUTPUT|[f=flv:select=\'a:2,v:3\']rtmp://$SERVER2/$APP/$STREAM_4"
+fi
 
 FFMPEG="ffmpeg
 	-hide_banner
