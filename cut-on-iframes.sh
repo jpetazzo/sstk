@@ -41,25 +41,28 @@ _cut_() {
   START=$1
   END=$2
   OUTPUT=$3
-  SALT=$(base64 /dev/urandom | head -c4)
+  SALT=$(base64 /dev/urandom | tr -d / | head -c4)
 
   if ! [ -f $INPUT.iframes ]; then
+    echo "*** Generating $INPUT.iframes... ***"
     ffprobe -show_frames -skip_frame nointra -select_streams v:0 $INPUT \
-      | grep ^pkt_pts_time | cut -d= -f2 \
+      | grep ^pts_time | cut -d= -f2 \
       > $INPUT.iframes
   fi
   START_IFR=$(python -c "import sys; print(max(float(s) for s in sys.stdin if float(s)<$START))" < $INPUT.iframes)
   END_IFR=$(python -c "import sys; print(min(float(s) for s in sys.stdin if float(s)>$END))" < $INPUT.iframes)
   DURATION=$(python -c "print($END_IFR-$START_IFR)")
 
-  ffmpeg -ss $START_IFR -t $DURATION -i $INPUT -c:a copy -c:v copy $OUTPUT-$SALT.mp4
+  #OUTPUT=$OUTPUT.mp4
+  OUTPUT=$OUTPUT-$SALT.mp4
+  ffmpeg -hide_banner -ss $START_IFR -t $DURATION -i $INPUT -c:a copy -c:v copy $OUTPUT
 }
 
 set -ue
 
 . "./$CUESHEET"
 
-rsync -Pav *.mp4 highfive:portal/www/html/replay/
+rsync -Pav *.mp4 highfive:replay/
 
 for F in *.mp4; do
   echo https://highfive.container.training/replay/$F
