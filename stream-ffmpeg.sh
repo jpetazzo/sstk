@@ -42,16 +42,28 @@ fi
 
 FPS=30
 
-# Reminder: to see alsa devices and their numbers, run "arecord -l"
-AUDIO_INPUT_NAME=ATR2USB
+# Note: to see alsa devices and their numbers, run "arecord -l"
+# Note: to see the device names used here, run "/sys/class/sound/card*/id"
+#AUDIO_INPUT_NAME=ATR2USB
 #AUDIO_INPUT_NAME=UDULTCDL
 #AUDIO_INPUT_NAME=C4K
+#AUDIO_INPUT_NAME=PCH
+AUDIO_INPUT_NAME=RX
 CARD_NUMBER=
 for CARD in /sys/class/sound/card*; do
 	if grep -q "$AUDIO_INPUT_NAME" $CARD/id; then
 		CARD_NUMBER=$(cat $CARD/number)
 		echo "Found ALSA card $AUDIO_INPUT_NAME (number $CARD_NUMBER)."
 		AUDIO_INPUT_ALSA="-f alsa -ac 2 -i hw:$CARD_NUMBER,0"
+                PULSE_CARD_NAME=$(pactl list short cards | grep $AUDIO_INPUT_NAME | cut -d"	" -f2)
+                if [ "$PULSE_CARD_NAME" ]; then
+                  PULSE_OFF_CMD="pactl set-card-profile $PULSE_CARD_NAME off"
+                  PULSE_ON_CMD="pactl set-card-profile $PULSE_CARD_NAME input:analog-stereo"
+                else
+                  echo "Warning: could not find Pulseaudio card corresponding to $AUDIO_INPUT_NAME."
+                  PULSE_OFF_CMD=""
+                  PULSE_ON_CMD=""
+                fi
 		break
 	fi
 done
@@ -61,6 +73,7 @@ if [ "$CARD_NUMBER" = "" ]; then
 fi
 AUDIO_INPUT_MUSIC="-re -i Downloads/Sonnentanz.m4a"
 AUDIO_INPUT_PULSE="-f pulse -i alsa_input.usb-UC_MIC_ATR2USB-00.analog-stereo"
+AUDIO_INPUT_PULSE="-f pulse -i alsa_input.usb-DJI_Technology_Co.__Ltd._Wireless_Microphone_RX-00.analog-stereo"
 AUDIO_INPUT_ALSA_DEFAULT="-f alsa -i default"
 
 VIDEO_INPUT_OBS="-f v4l2 -frame_size 1920x1080 -framerate $FPS -i /dev/video8"
@@ -156,26 +169,32 @@ echo "$FFMPEG"
 
 case "$MODE" in
 	sound-check)
+    $PULSE_OFF_CMD
 		ffplay $AUDIO_INPUT
-                FFRET=$?
+    FFRET=$?
+    $PULSE_ON_CMD
 		;;
 	stream-with-recording)
+    systemctl --user stop xidlehook
 		xset s off
 		xset -dpms
+    $PULSE_OFF_CMD
 		$FFMPEG
-                FFRET=$?
+    FFRET=$?
+    $PULSE_ON_CMD
 		xset s on
 		xset +dpms
+    systemctl --user start xidlehook
 		;;
 	stream-without-recording)
 		$FFMPEG
-                FFRET=$?
+    FFRET=$?
 		;;
 esac
 
 if [ "$FFRET" != "0" ]; then
   echo "It looks like there was an error."
   echo "Hint: if the audio device is held by pulseaudio, here is how to free it:"
-  echo "pacmd list-modules | grep -B 2 -e $AUDIO_INPUT_NAME"
-  echo "pacmd unload-module XX # use number shown above"
+  echo "pactl list short sources | grep $AUDIO_INPUT_NAME"
+  echo "pactl suspend-source XX # use number shown above"
 fi

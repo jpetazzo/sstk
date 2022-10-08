@@ -74,9 +74,10 @@ if [ "$OUTPUT" ]; then
 
   # Figure out the name of the "main" output (the one at +0+).
   MAIN=$(xrandr -q | grep 3840x2160+0+0 | cut -d" " -f1)
-  for WS in 1 2 3 4; do move_workspace $WS TOP; done
-  [ "$MAIN" ] && for WS in 5 6 7 9 10; do move_workspace $WS $MAIN; done
+  for WS in 1 2 3 4 5; do move_workspace $WS TOP; done
+  [ "$MAIN" ] && for WS in 6 7 9 10; do move_workspace $WS $MAIN; done
   for WS in 8; do move_workspace $WS LEFTHALF; done
+  i3-msg "workspace 8; layout splitv"
   for WS in 11; do move_workspace $WS BOTTOM; done
   exit 0
 fi
