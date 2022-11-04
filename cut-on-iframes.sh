@@ -62,8 +62,15 @@ set -ue
 
 . "./$CUESHEET"
 
-rsync -Pav *.mp4 highfive:replay/
+REMOTE=ververica
 
-for F in *.mp4; do
-  echo https://highfive.container.training/replay/$F
-done
+if [ "$REMOTE" ]; then
+  ssh $REMOTE mkdir -p portal.container.training/www/html/replay
+  ssh $REMOTE "[ -d replay ] || ln -s portal.container.training/www/html/replay"
+
+  rsync -Pav *.mp4 $REMOTE:replay/
+
+  for F in *.mp4; do
+    echo https://$REMOTE.container.training/replay/$F
+  done
+fi
