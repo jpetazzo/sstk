@@ -82,6 +82,27 @@ if [ "$OUTPUT" ]; then
   exit 0
 fi
 
+# Let's check if we have a single 4K monitor.
+OUTPUT=$(xrandr -q | grep 3840x2160+0+0 | cut -d" " -f1)
+if [ "$OUTPUT" ]; then
+  echo "Detected single 4K monitor (output=$OUTPUT)."
+  W_OFFSET=$((1*1920))
+  TOP_OUTPUT=none
+  BOTTOM_OUTPUT=none
+  do_the_thing
+
+  # Assign the left half of the screen too
+  xrandr --delmonitor LEFTHALF || true
+  xrandr --setmonitor LEFTHALF \
+    ${W_PX}/${W_MM}x$((2*${H_PX}))/$((2*${H_MM}))+0+0 $OUTPUT
+
+  for WS in 1 2 3 4 5; do move_workspace $WS TOP; done
+  for WS in 6 7 8 9 10; do move_workspace $WS LEFTHALF; done
+  for WS in 11; do move_workspace $WS BOTTOM; done
+  exit 0
+fi
+
+
 # Let's check if we have a 1920x2160 main screen.
 # If so, split it top and bottom.
 OUTPUT=$(xrandr -q | grep 1920x2160+0+0 | cut -d" " -f1)
