@@ -1,12 +1,9 @@
 #!/bin/sh
+set -eu
 
-if [ "$1" = "" ]; then
-  echo "Please specify ingest server (e.g. highfive.container.training) as first argument."
-  exit 1
-fi
+. ./.env
 
-SERVER1=$1
-shift
+SERVER1=$REMOTE
 #SERVER2=dev.container.training
 APP=live
 MONITOR=udp://127.0.0.1:1234
@@ -91,7 +88,7 @@ INPUT="
 
 #INPUT="$INPUT_LOOP"
 
-if [ "$1" ]; then
+if [ "$#" -gt 0 ]; then
   MODE=$1
 else
   DEFAULT=R
@@ -131,15 +128,16 @@ ENCODE_AUDIO="
 
 ENCODE_VIDEO="
 	$CODEC
-        -filter_complex format=yuv420p,split=2[s1][30fps];[s1]fps=fps=15[15fps];[30fps]split=3[30fps1][30fps2][30fps3];[15fps]split=2[15fps1][15fps2]
+  -filter_complex format=yuv420p,split=2[s1][30fps];[s1]fps=fps=15[15fps];[30fps]split=3[30fps1][30fps2][30fps3];[15fps]split=2[15fps1][15fps2]
 	-map [30fps1] -b:v:0 4000k -maxrate:v:0 4000k -bufsize:v:0 4000k -g:v:0 $((1*$FPS))
 	-map [30fps2] -b:v:1 2000k -maxrate:v:1 2000k -bufsize:v:1 2000k -g:v:1 $((1*$FPS))
 	-map [15fps1] -b:v:2 1000k -maxrate:v:2 1000k -bufsize:v:2 2000k -g:v:2 $((1*$FPS))
 	-map [15fps2] -b:v:3  500k -maxrate:v:3  600k -bufsize:v:3 1000k -g:v:3 $((1*$FPS))
-        -map [30fps3]
+  -map [30fps3]
 	"
 
 OUTPUT="-f tee -flags +global_header"
+OUTPUT="$OUTPUT -use_fifo 1 -fifo_options drop_pkts_on_overflow=true:attempt_recovery=1:recover_any_error=1:restart_with_keyframe=1"
 OUTPUT="$OUTPUT [f=mpegts:select=\'v:0\']$MONITOR"
 if [ "$MODE" = "stream-with-recording" ]; then
 	mkdir -p recordings
@@ -150,7 +148,7 @@ OUTPUT="$OUTPUT|[f=flv:select=\'a:0,v:0\']rtmp://$SERVER1/$APP/$STREAM_1"
 OUTPUT="$OUTPUT|[f=flv:select=\'a:0,v:1\']rtmp://$SERVER1/$APP/$STREAM_2"
 OUTPUT="$OUTPUT|[f=flv:select=\'a:1,v:2\']rtmp://$SERVER1/$APP/$STREAM_3"
 OUTPUT="$OUTPUT|[f=flv:select=\'a:2,v:3\']rtmp://$SERVER1/$APP/$STREAM_4"
-if [ "$SERVER2" ]; then
+if [ "${SERVER2-}" ]; then
 	OUTPUT="$OUTPUT|[f=flv:select=\'a:0,v:0\']rtmp://$SERVER2/$APP/$STREAM_1"
 	OUTPUT="$OUTPUT|[f=flv:select=\'a:0,v:1\']rtmp://$SERVER2/$APP/$STREAM_2"
 	OUTPUT="$OUTPUT|[f=flv:select=\'a:1,v:2\']rtmp://$SERVER2/$APP/$STREAM_3"
@@ -159,6 +157,7 @@ fi
 
 FFMPEG="ffmpeg
 	-hide_banner
+	-report
 	$INPUT
 	$ENCODE_AUDIO
 	$ENCODE_VIDEO

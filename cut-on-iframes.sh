@@ -1,5 +1,7 @@
 #!/bin/sh
 
+. ./.env
+
 if ! [ "$1" ]; then
   echo "
 This script will cut a video file into segments.
@@ -49,8 +51,8 @@ _cut_() {
       | grep ^pts_time | cut -d= -f2 \
       > $INPUT.iframes
   fi
-  START_IFR=$(python -c "import sys; print(max(float(s) for s in sys.stdin if float(s)<$START))" < $INPUT.iframes)
-  END_IFR=$(python -c "import sys; print(min(float(s) for s in sys.stdin if float(s)>$END))" < $INPUT.iframes)
+  START_IFR=$(python -c "import sys; print(max([float(s) for s in sys.stdin if float(s)<$START], default=$START))" < $INPUT.iframes)
+  END_IFR=$(python -c "import sys; print(min([float(s) for s in sys.stdin if float(s)>$END], default=$END))" < $INPUT.iframes)
   DURATION=$(python -c "print($END_IFR-$START_IFR)")
 
   #OUTPUT=$OUTPUT.mp4
@@ -62,8 +64,6 @@ set -ue
 
 . "./$CUESHEET"
 
-REMOTE=ververica
-
 if [ "$REMOTE" ]; then
   ssh $REMOTE mkdir -p portal.container.training/www/html/replay
   ssh $REMOTE "[ -d replay ] || ln -s portal.container.training/www/html/replay"
@@ -71,6 +71,6 @@ if [ "$REMOTE" ]; then
   rsync -Pav *.mp4 $REMOTE:replay/
 
   for F in *.mp4; do
-    echo https://$REMOTE.container.training/replay/$F
+    echo https://$REMOTE/replay/$F
   done
 fi
