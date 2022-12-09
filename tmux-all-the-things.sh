@@ -9,4 +9,4 @@ tmux list-windows -f '#{m:stream,#W}' | grep -q . || tmux new-window -n stream n
 tmux select-window -t stream
 tmux list-panes | wc -l | grep -q ^1$ && tmux split-window -v -b -l 10
 #pidof -sq ffmpeg || tmux new-window -n kiyo kiyo.sh
-[ "$TMUX" ] || tmux attach
+[ "${TMUX-}" ] || tmux attach

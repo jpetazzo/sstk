@@ -148,6 +148,7 @@ OUTPUT="$OUTPUT|[f=flv:select=\'a:0,v:0\']rtmp://$SERVER1/$APP/$STREAM_1"
 OUTPUT="$OUTPUT|[f=flv:select=\'a:0,v:1\']rtmp://$SERVER1/$APP/$STREAM_2"
 OUTPUT="$OUTPUT|[f=flv:select=\'a:1,v:2\']rtmp://$SERVER1/$APP/$STREAM_3"
 OUTPUT="$OUTPUT|[f=flv:select=\'a:2,v:3\']rtmp://$SERVER1/$APP/$STREAM_4"
+#OUTPUT="$OUTPUT|[f=flv:select=\'a:0,v:1\']rtmp://a.rtmp.youtube.com/live2/xxxx-xxxx-xxxx-xxxx-xxxx"
 if [ "${SERVER2-}" ]; then
 	OUTPUT="$OUTPUT|[f=flv:select=\'a:0,v:0\']rtmp://$SERVER2/$APP/$STREAM_1"
 	OUTPUT="$OUTPUT|[f=flv:select=\'a:0,v:1\']rtmp://$SERVER2/$APP/$STREAM_2"
