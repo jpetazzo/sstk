@@ -73,7 +73,23 @@ AUDIO_INPUT_PULSE="-f pulse -i alsa_input.usb-UC_MIC_ATR2USB-00.analog-stereo"
 AUDIO_INPUT_PULSE="-f pulse -i alsa_input.usb-DJI_Technology_Co.__Ltd._Wireless_Microphone_RX-00.analog-stereo"
 AUDIO_INPUT_ALSA_DEFAULT="-f alsa -i default"
 
-VIDEO_INPUT_OBS="-f v4l2 -frame_size 1920x1080 -framerate $FPS -i /dev/video8"
+OBS_VIRTUAL_DEVICE_NAME="OBS"
+OBS_VIRTUAL_DEVICE=""
+while [ -z "$OBS_VIRTUAL_DEVICE" ] ; do
+  for dev in /sys/class/video4linux/* ; do
+    if [ "$(cat $dev/name)" = "$OBS_VIRTUAL_DEVICE_NAME" ] ; then
+      OBS_VIRTUAL_DEVICE="/dev/$(basename $dev)"
+      echo "Found OBS virtual device named '$OBS_VIRTUAL_DEVICE_NAME' on '$OBS_VIRTUAL_DEVICE'."
+      break
+    fi
+  done
+  if [ -z "$OBS_VIRTUAL_DEVICE" ] ; then
+    echo "Waiting for OBS Virtual Camera device (it has to be named '$OBS_VIRTUAL_DEVICE_NAME')..."
+    sleep 1
+  fi
+done
+
+VIDEO_INPUT_OBS="-f v4l2 -frame_size 1920x1080 -framerate $FPS -i $OBS_VIRTUAL_DEVICE"
 VIDEO_INPUT_TEST="-re -f lavfi -i testsrc=size=hd1080:rate=30:decimals=1"
 INPUT_LOOP="-re -fflags +genpts -stream_loop -1 -i loop.mkv"
 VIDEO_INPUT_CLOCK="-re -f lavfi -i color=color=white:s=hd1080:r=30[white];movie=CLOCK.JPG,scale=hd1080:force_original_aspect_ratio=decrease[img];[white][img]overlay,drawtext=text=%{localtime}:fontcolor=black:x=w-text_w-96:y=(h-text_h)/2:fontsize=48,drawtext=text=Playing→:fontcolor=black:x=w-text_w-32:y=h-3*text_h-32:fontsize=32,drawtext=textfile=title.txt:fontcolor=black:x=w-text_w-32:y=h-text_h-32:fontsize=32'"

@@ -71,6 +71,6 @@ if [ "$REMOTE" ]; then
   rsync -Pav *.mp4 $REMOTE:replay/
 
   for F in *.mp4; do
-    echo https://$REMOTE.container.training/replay/$F
+    echo https://$REMOTE/replay/$F
   done
 fi
