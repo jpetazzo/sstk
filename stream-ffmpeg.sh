@@ -14,10 +14,23 @@ MONITOR=udp://127.0.0.1:1234
 CODEC="-c:v libx264 -preset medium -tune:v zerolatency -profile:v baseline"
 # But this one would yield higher quality (at the expense of a bit more latency and CPU usage)
 #CODEC="-c:v libx264 -preset medium -profile:v main"
+HWINIT=
+VIDEOFILTER=format=yuv420p
+
+# If we detect a seemingly working VAAPI setup, use it
+# (this has been written specifically for Intel QuickSync;
+# we tried to use h264_qsv but weren't able to get it to work)
+if vainfo >/dev/null; then
+  HWINIT="-hwaccel vaapi -vaapi_device /dev/dri/renderD128"
+  CODEC="-c:v h264_vaapi -profile:v main -profile:v:4 high"
+  VIDEOFILTER=format=nv12,hwupload
+fi
 
 # If we detect an AMD GPU, use AMF (Advanced Media Framework)
 if lspci | grep -qw Renoir; then
   CODEC="-c:v h264_amf -quality 2 -rc cbr"
+  HWINIT=""
+  VIDEOFILTER=format=yuv420p
   # Another option:
   #CODEC="-c:v h264_amf -profile:v 256 -quality 2 -rc cbr"
   # For reference:
@@ -31,6 +44,8 @@ if lspci | grep -qw NVIDIA; then
   # (Here for reference version only; not used anymore in recent SDKs)
   #CODEC="-c:v h264_nvenc -preset ll -profile:v baseline -rc cbr_ld_hq"
   # New (2021ish) version of NVENC
+  HWINIT=""
+  VIDEOFILTER=format=yuv420p
   CODEC="
     -c:v   h264_nvenc -tune ll -profile:v baseline -rc cbr
     -c:v:4 h264_nvenc -preset:v:4 p4 -profile:v:4 high -rc:v:4 vbr -cq:v:4 36
@@ -144,12 +159,12 @@ ENCODE_AUDIO="
 
 ENCODE_VIDEO="
 	$CODEC
-  -filter_complex format=yuv420p,split=2[s1][30fps];[s1]fps=fps=15[15fps];[30fps]split=3[30fps1][30fps2][30fps3];[15fps]split=2[15fps1][15fps2]
+	-filter_complex $VIDEOFILTER,split=2[s1][30fps];[s1]fps=fps=15[15fps];[30fps]split=3[30fps1][30fps2][30fps3];[15fps]split=2[15fps1][15fps2]
 	-map [30fps1] -b:v:0 4000k -maxrate:v:0 4000k -bufsize:v:0 4000k -g:v:0 $((1*$FPS))
 	-map [30fps2] -b:v:1 2000k -maxrate:v:1 2000k -bufsize:v:1 2000k -g:v:1 $((1*$FPS))
 	-map [15fps1] -b:v:2 1000k -maxrate:v:2 1000k -bufsize:v:2 2000k -g:v:2 $((1*$FPS))
 	-map [15fps2] -b:v:3  500k -maxrate:v:3  600k -bufsize:v:3 1000k -g:v:3 $((1*$FPS))
-  -map [30fps3]
+	-map [30fps3]
 	"
 
 OUTPUT="-f tee -flags +global_header"
@@ -175,6 +190,7 @@ fi
 FFMPEG="ffmpeg
 	-hide_banner
 	-report
+        $HWINIT
 	$INPUT
 	$ENCODE_AUDIO
 	$ENCODE_VIDEO
