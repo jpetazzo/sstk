@@ -1,4 +1,7 @@
 #!/bin/sh
+# To automatically format this file properly:
+# shfmt --indent 2 <script-name.sh>
+
 set -eu
 
 . ./.env
@@ -63,25 +66,25 @@ FPS=30
 AUDIO_INPUT_NAME=RX
 CARD_NUMBER=
 for CARD in /sys/class/sound/card*; do
-	if grep -q "$AUDIO_INPUT_NAME" $CARD/id; then
-		CARD_NUMBER=$(cat $CARD/number)
-		echo "Found ALSA card $AUDIO_INPUT_NAME (number $CARD_NUMBER)."
-		AUDIO_INPUT_ALSA="-f alsa -ac 2 -i hw:$CARD_NUMBER,0"
-                PULSE_CARD_NAME=$(pactl list short cards | grep $AUDIO_INPUT_NAME | cut -d"	" -f2)
-                if [ "$PULSE_CARD_NAME" ]; then
-                  PULSE_OFF_CMD="pactl set-card-profile $PULSE_CARD_NAME off"
-                  PULSE_ON_CMD="pactl set-card-profile $PULSE_CARD_NAME input:analog-stereo"
-                else
-                  echo "Warning: could not find Pulseaudio card corresponding to $AUDIO_INPUT_NAME."
-                  PULSE_OFF_CMD=""
-                  PULSE_ON_CMD=""
-                fi
-		break
-	fi
+  if grep -q "$AUDIO_INPUT_NAME" $CARD/id; then
+    CARD_NUMBER=$(cat $CARD/number)
+    echo "Found ALSA card $AUDIO_INPUT_NAME (number $CARD_NUMBER)."
+    AUDIO_INPUT_ALSA="-f alsa -ac 2 -i hw:$CARD_NUMBER,0"
+    PULSE_CARD_NAME=$(pactl list short cards | grep $AUDIO_INPUT_NAME | cut -d"	" -f2)
+    if [ "$PULSE_CARD_NAME" ]; then
+      PULSE_OFF_CMD="pactl set-card-profile $PULSE_CARD_NAME off"
+      PULSE_ON_CMD="pactl set-card-profile $PULSE_CARD_NAME input:analog-stereo"
+    else
+      echo "Warning: could not find Pulseaudio card corresponding to $AUDIO_INPUT_NAME."
+      PULSE_OFF_CMD=""
+      PULSE_ON_CMD=""
+    fi
+    break
+  fi
 done
 if [ "$CARD_NUMBER" = "" ]; then
-	echo "Could not find ALSA card $AUDIO_INPUT_NAME. Aborting."
-	exit 1
+  echo "Could not find ALSA card $AUDIO_INPUT_NAME. Aborting."
+  exit 1
 fi
 AUDIO_INPUT_MUSIC="-re -i Downloads/Sonnentanz.m4a"
 AUDIO_INPUT_PULSE="-f pulse -i alsa_input.usb-UC_MIC_ATR2USB-00.analog-stereo"
@@ -90,15 +93,15 @@ AUDIO_INPUT_ALSA_DEFAULT="-f alsa -i default"
 
 OBS_VIRTUAL_DEVICE_NAME="OBS"
 OBS_VIRTUAL_DEVICE=""
-while [ -z "$OBS_VIRTUAL_DEVICE" ] ; do
-  for dev in /sys/class/video4linux/* ; do
-    if [ "$(cat $dev/name)" = "$OBS_VIRTUAL_DEVICE_NAME" ] ; then
+while [ -z "$OBS_VIRTUAL_DEVICE" ]; do
+  for dev in /sys/class/video4linux/*; do
+    if [ "$(cat $dev/name)" = "$OBS_VIRTUAL_DEVICE_NAME" ]; then
       OBS_VIRTUAL_DEVICE="/dev/$(basename $dev)"
       echo "Found OBS virtual device named '$OBS_VIRTUAL_DEVICE_NAME' on '$OBS_VIRTUAL_DEVICE'."
       break
     fi
   done
-  if [ -z "$OBS_VIRTUAL_DEVICE" ] ; then
+  if [ -z "$OBS_VIRTUAL_DEVICE" ]; then
     echo "Waiting for OBS Virtual Camera device (it has to be named '$OBS_VIRTUAL_DEVICE_NAME')..."
     sleep 1
   fi
@@ -131,18 +134,21 @@ else
   read CHOICE
   [ "$CHOICE" = "" ] && CHOICE=$DEFAULT
   case $CHOICE in
-  C) MODE=sound-check;;
-  R) MODE=stream-with-recording;;
-  T) MODE=stream-without-recording;;
-  *) MODE=$CHOICE;;
+  C) MODE=sound-check ;;
+  R) MODE=stream-with-recording ;;
+  T) MODE=stream-without-recording ;;
+  *) MODE=$CHOICE ;;
   esac
 fi
 
 case $MODE in
-  sound-check) ;;
-  stream-with-recording) ;;
-  stream-without-recording) ;;
-  *) echo "Unsupported mode ($MODE)."; exit 1;;
+sound-check) ;;
+stream-with-recording) ;;
+stream-without-recording) ;;
+*)
+  echo "Unsupported mode ($MODE)."
+  exit 1
+  ;;
 esac
 
 STREAM_1=stream1
@@ -160,10 +166,10 @@ ENCODE_AUDIO="
 ENCODE_VIDEO="
 	$CODEC
 	-filter_complex $VIDEOFILTER,split=2[s1][30fps];[s1]fps=fps=15[15fps];[30fps]split=3[30fps1][30fps2][30fps3];[15fps]split=2[15fps1][15fps2]
-	-map [30fps1] -b:v:0 4000k -maxrate:v:0 4000k -bufsize:v:0 4000k -g:v:0 $((1*$FPS))
-	-map [30fps2] -b:v:1 2000k -maxrate:v:1 2000k -bufsize:v:1 2000k -g:v:1 $((1*$FPS))
-	-map [15fps1] -b:v:2 1000k -maxrate:v:2 1000k -bufsize:v:2 2000k -g:v:2 $((1*$FPS))
-	-map [15fps2] -b:v:3  500k -maxrate:v:3  600k -bufsize:v:3 1000k -g:v:3 $((1*$FPS))
+	-map [30fps1] -b:v:0 4000k -maxrate:v:0 4000k -bufsize:v:0 4000k -g:v:0 $((1 * $FPS))
+	-map [30fps2] -b:v:1 2000k -maxrate:v:1 2000k -bufsize:v:1 2000k -g:v:1 $((1 * $FPS))
+	-map [15fps1] -b:v:2 1000k -maxrate:v:2 1000k -bufsize:v:2 2000k -g:v:2 $((1 * $FPS))
+	-map [15fps2] -b:v:3  500k -maxrate:v:3  600k -bufsize:v:3 1000k -g:v:3 $((1 * $FPS))
 	-map [30fps3]
 	"
 
@@ -171,9 +177,9 @@ OUTPUT="-f tee -flags +global_header"
 OUTPUT="$OUTPUT -use_fifo 1 -fifo_options drop_pkts_on_overflow=true:attempt_recovery=1:recover_any_error=1:restart_with_keyframe=1"
 OUTPUT="$OUTPUT [f=mpegts:select=\'v:0\']$MONITOR"
 if [ "$MODE" = "stream-with-recording" ]; then
-	mkdir -p recordings
-	FILENAME=recordings/$(date +%Y-%m-%d_%H:%M:%S).mkv
-	OUTPUT="$OUTPUT|[select=\'a:0,v:4\']$FILENAME"
+  mkdir -p recordings
+  FILENAME=recordings/$(date +%Y-%m-%d_%H:%M:%S).mkv
+  OUTPUT="$OUTPUT|[select=\'a:0,v:4\']$FILENAME"
 fi
 OUTPUT="$OUTPUT|[f=flv:select=\'a:0,v:0\']rtmp://$SERVER1/$APP/$STREAM_1"
 OUTPUT="$OUTPUT|[f=flv:select=\'a:0,v:1\']rtmp://$SERVER1/$APP/$STREAM_2"
@@ -181,10 +187,10 @@ OUTPUT="$OUTPUT|[f=flv:select=\'a:1,v:2\']rtmp://$SERVER1/$APP/$STREAM_3"
 OUTPUT="$OUTPUT|[f=flv:select=\'a:2,v:3\']rtmp://$SERVER1/$APP/$STREAM_4"
 #OUTPUT="$OUTPUT|[f=flv:select=\'a:0,v:1\']rtmp://a.rtmp.youtube.com/live2/xxxx-xxxx-xxxx-xxxx-xxxx"
 if [ "${SERVER2-}" ]; then
-	OUTPUT="$OUTPUT|[f=flv:select=\'a:0,v:0\']rtmp://$SERVER2/$APP/$STREAM_1"
-	OUTPUT="$OUTPUT|[f=flv:select=\'a:0,v:1\']rtmp://$SERVER2/$APP/$STREAM_2"
-	OUTPUT="$OUTPUT|[f=flv:select=\'a:1,v:2\']rtmp://$SERVER2/$APP/$STREAM_3"
-	OUTPUT="$OUTPUT|[f=flv:select=\'a:2,v:3\']rtmp://$SERVER2/$APP/$STREAM_4"
+  OUTPUT="$OUTPUT|[f=flv:select=\'a:0,v:0\']rtmp://$SERVER2/$APP/$STREAM_1"
+  OUTPUT="$OUTPUT|[f=flv:select=\'a:0,v:1\']rtmp://$SERVER2/$APP/$STREAM_2"
+  OUTPUT="$OUTPUT|[f=flv:select=\'a:1,v:2\']rtmp://$SERVER2/$APP/$STREAM_3"
+  OUTPUT="$OUTPUT|[f=flv:select=\'a:2,v:3\']rtmp://$SERVER2/$APP/$STREAM_4"
 fi
 
 FFMPEG="ffmpeg
@@ -200,28 +206,30 @@ FFMPEG="ffmpeg
 echo "$FFMPEG"
 
 case "$MODE" in
-	sound-check)
-    $PULSE_OFF_CMD
-		ffplay $AUDIO_INPUT
-    FFRET=$?
-    $PULSE_ON_CMD
-		;;
-	stream-with-recording)
-    systemctl --user stop xidlehook
-		xset s off
-		xset -dpms
-    $PULSE_OFF_CMD
-		systemd-inhibit $FFMPEG
-    FFRET=$?
-    $PULSE_ON_CMD
-		xset s on
-		xset +dpms
-    systemctl --user start xidlehook
-		;;
-	stream-without-recording)
-		$FFMPEG
-    FFRET=$?
-		;;
+sound-check)
+  $PULSE_OFF_CMD
+  ffplay $AUDIO_INPUT
+  FFRET=$?
+  $PULSE_ON_CMD
+  ;;
+stream-with-recording)
+  systemctl --user stop xidlehook
+  xset s off
+  xset -dpms
+  $PULSE_OFF_CMD
+  systemd-inhibit $FFMPEG
+  FFRET=$?
+  $PULSE_ON_CMD
+  xset s on
+  xset +dpms
+  systemctl --user start xidlehook
+  ;;
+stream-without-recording)
+  $PULSE_OFF_CMD
+  $FFMPEG
+  FFRET=$?
+  $PULSE_ON_CMD
+  ;;
 esac
 
 if [ "$FFRET" != "0" ]; then
