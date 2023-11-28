@@ -211,7 +211,7 @@ case "$MODE" in
 		xset s off
 		xset -dpms
     $PULSE_OFF_CMD
-		$FFMPEG
+		systemd-inhibit $FFMPEG
     FFRET=$?
     $PULSE_ON_CMD
 		xset s on
