@@ -122,35 +122,6 @@ INPUT="
 
 #INPUT="$INPUT_LOOP"
 
-if [ "$#" -gt 0 ]; then
-  MODE=$1
-else
-  DEFAULT=R
-  echo "Please specify mode of operation:"
-  echo "[C] sound-check"
-  echo "[R] stream-with-recording"
-  echo "[T] stream-without-recording"
-  echo "(Or press ENTER for default mode, which is [$DEFAULT])"
-  read CHOICE
-  [ "$CHOICE" = "" ] && CHOICE=$DEFAULT
-  case $CHOICE in
-  C) MODE=sound-check ;;
-  R) MODE=stream-with-recording ;;
-  T) MODE=stream-without-recording ;;
-  *) MODE=$CHOICE ;;
-  esac
-fi
-
-case $MODE in
-sound-check) ;;
-stream-with-recording) ;;
-stream-without-recording) ;;
-*)
-  echo "Unsupported mode ($MODE)."
-  exit 1
-  ;;
-esac
-
 STREAM_1=stream1
 STREAM_2=stream2
 STREAM_3=stream3
@@ -176,11 +147,12 @@ ENCODE_VIDEO="
 OUTPUT="-f tee -flags +global_header"
 OUTPUT="$OUTPUT -use_fifo 1 -fifo_options drop_pkts_on_overflow=true:attempt_recovery=1:recover_any_error=1:restart_with_keyframe=1"
 OUTPUT="$OUTPUT [f=mpegts:select=\'v:0\']$MONITOR"
-if [ "$MODE" = "stream-with-recording" ]; then
-  mkdir -p recordings
-  FILENAME=recordings/$(date +%Y-%m-%d_%H:%M:%S).mkv
-  OUTPUT="$OUTPUT|[select=\'a:0,v:4\']$FILENAME"
-fi
+
+# Comment out these 3 lines to disable recording
+mkdir -p recordings
+FILENAME=recordings/$(date +%Y-%m-%d_%H:%M:%S).mkv
+OUTPUT="$OUTPUT|[select=\'a:0,v:4\']$FILENAME"
+
 OUTPUT="$OUTPUT|[f=flv:select=\'a:0,v:0\']rtmp://$SERVER1/$APP/$STREAM_1"
 OUTPUT="$OUTPUT|[f=flv:select=\'a:0,v:1\']rtmp://$SERVER1/$APP/$STREAM_2"
 OUTPUT="$OUTPUT|[f=flv:select=\'a:1,v:2\']rtmp://$SERVER1/$APP/$STREAM_3"
@@ -203,34 +175,46 @@ FFMPEG="ffmpeg
 	$OUTPUT
 	"
 
+set +eu
+
 echo "$FFMPEG"
 
-case "$MODE" in
-sound-check)
-  $PULSE_OFF_CMD
-  ffplay $AUDIO_INPUT
-  FFRET=$?
-  $PULSE_ON_CMD
-  ;;
-stream-with-recording)
+sep () {
+  echo "----------------------------------"
+}
+
+
+sep
+echo "Press ENTER to start the sound check."
+echo "To end the sound check, press 'q'."
+sep
+read
+
+$PULSE_OFF_CMD
+ffplay $AUDIO_INPUT
+$PULSE_ON_CMD
+
+sep
+echo "Press ENTER to go live, or Ctrl-C to abort now."
+echo "To end the live stream, press 'q'."
+sep
+read
+
+[ "$WAYLAND_DISPLAY" ] || {
   systemctl --user stop xidlehook
   xset s off
   xset -dpms
-  $PULSE_OFF_CMD
-  systemd-inhibit $FFMPEG
-  FFRET=$?
-  $PULSE_ON_CMD
+}
+$PULSE_OFF_CMD
+systemd-inhibit $FFMPEG
+FFRET=$?
+$PULSE_ON_CMD
+
+[ "$WAYLAND_DISPLAY" ] || {
   xset s on
   xset +dpms
   systemctl --user start xidlehook
-  ;;
-stream-without-recording)
-  $PULSE_OFF_CMD
-  $FFMPEG
-  FFRET=$?
-  $PULSE_ON_CMD
-  ;;
-esac
+}
 
 if [ "$FFRET" != "0" ]; then
   echo "It looks like there was an error."
