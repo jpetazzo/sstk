@@ -7,33 +7,35 @@ set -eu
 . ./.env
 
 SERVER1=$REMOTE
-#SERVER2=dev.container.training
 APP=live
 MONITOR=udp://127.0.0.1:1234
 #MONITOR=udp://10.0.0.16:1234
 
 # Default to software encoding
+CODECINFO="libx264 (CPU)"
+HWINIT=
+VIDEOFILTER=format=yuv420p
 # This one should reduce latency (no B-frames etc) and make the job easier on the decoder, too
 CODEC="-c:v libx264 -preset medium -tune:v zerolatency -profile:v baseline"
 # But this one would yield higher quality (at the expense of a bit more latency and CPU usage)
 #CODEC="-c:v libx264 -preset medium -profile:v main"
-HWINIT=
-VIDEOFILTER=format=yuv420p
 
 # If we detect a seemingly working VAAPI setup, use it
 # (this has been written specifically for Intel QuickSync;
 # we tried to use h264_qsv but weren't able to get it to work)
 if vainfo >/dev/null; then
+  CODECINFO="h264_vaapi (Intel GPU and other VAAPI platforms)"
   HWINIT="-hwaccel vaapi -vaapi_device /dev/dri/renderD128"
-  CODEC="-c:v h264_vaapi -profile:v main -profile:v:4 high"
+  CODEC="-c:v h264_vaapi -profile:v main -profile:v:4 high -qp:v:4 25"
   VIDEOFILTER=format=nv12,hwupload
 fi
 
 # If we detect an AMD GPU, use AMF (Advanced Media Framework)
 if lspci | grep -qw Renoir; then
-  CODEC="-c:v h264_amf -quality 2 -rc cbr"
+  CODECINFO="CODEC: h264_amf (AMD GPU)"
   HWINIT=""
   VIDEOFILTER=format=yuv420p
+  CODEC="-c:v h264_amf -quality 2 -rc cbr"
   # Another option:
   #CODEC="-c:v h264_amf -profile:v 256 -quality 2 -rc cbr"
   # For reference:
@@ -47,6 +49,7 @@ if lspci | grep -qw NVIDIA; then
   # (Here for reference version only; not used anymore in recent SDKs)
   #CODEC="-c:v h264_nvenc -preset ll -profile:v baseline -rc cbr_ld_hq"
   # New (2021ish) version of NVENC
+  CODECINFO="CODEC: h264_nvenc (NVIDIA GPU)"
   HWINIT=""
   VIDEOFILTER=format=yuv420p
   CODEC="
@@ -54,6 +57,8 @@ if lspci | grep -qw NVIDIA; then
     -c:v:4 h264_nvenc -preset:v:4 p4 -profile:v:4 high -rc:v:4 vbr -cq:v:4 36
     "
 fi
+
+echo "$CODECINFO"
 
 FPS=30
 
@@ -68,7 +73,7 @@ CARD_NUMBER=
 for CARD in /sys/class/sound/card*; do
   if grep -q "$AUDIO_INPUT_NAME" $CARD/id; then
     CARD_NUMBER=$(cat $CARD/number)
-    echo "Found ALSA card $AUDIO_INPUT_NAME (number $CARD_NUMBER)."
+    echo "AUDIO: type=ALSA, id=$AUDIO_INPUT_NAME, number=$CARD_NUMBER"
     AUDIO_INPUT_ALSA="-f alsa -ac 2 -i hw:$CARD_NUMBER,0"
     PULSE_CARD_NAME=$(pactl list short cards | grep $AUDIO_INPUT_NAME | cut -d"	" -f2)
     if [ "$PULSE_CARD_NAME" ]; then
@@ -97,7 +102,7 @@ while [ -z "$OBS_VIRTUAL_DEVICE" ]; do
   for dev in /sys/class/video4linux/*; do
     if [ "$(cat $dev/name)" = "$OBS_VIRTUAL_DEVICE_NAME" ]; then
       OBS_VIRTUAL_DEVICE="/dev/$(basename $dev)"
-      echo "Found OBS virtual device named '$OBS_VIRTUAL_DEVICE_NAME' on '$OBS_VIRTUAL_DEVICE'."
+      echo "VIDEO: type=V4L2, name=$OBS_VIRTUAL_DEVICE_NAME, device=$OBS_VIRTUAL_DEVICE"
       break
     fi
   done
@@ -157,13 +162,15 @@ OUTPUT="$OUTPUT|[f=flv:select=\'a:0,v:0\']rtmp://$SERVER1/$APP/$STREAM_1"
 OUTPUT="$OUTPUT|[f=flv:select=\'a:0,v:1\']rtmp://$SERVER1/$APP/$STREAM_2"
 OUTPUT="$OUTPUT|[f=flv:select=\'a:1,v:2\']rtmp://$SERVER1/$APP/$STREAM_3"
 OUTPUT="$OUTPUT|[f=flv:select=\'a:2,v:3\']rtmp://$SERVER1/$APP/$STREAM_4"
-#OUTPUT="$OUTPUT|[f=flv:select=\'a:0,v:1\']rtmp://a.rtmp.youtube.com/live2/xxxx-xxxx-xxxx-xxxx-xxxx"
-if [ "${SERVER2-}" ]; then
-  OUTPUT="$OUTPUT|[f=flv:select=\'a:0,v:0\']rtmp://$SERVER2/$APP/$STREAM_1"
-  OUTPUT="$OUTPUT|[f=flv:select=\'a:0,v:1\']rtmp://$SERVER2/$APP/$STREAM_2"
-  OUTPUT="$OUTPUT|[f=flv:select=\'a:1,v:2\']rtmp://$SERVER2/$APP/$STREAM_3"
-  OUTPUT="$OUTPUT|[f=flv:select=\'a:2,v:3\']rtmp://$SERVER2/$APP/$STREAM_4"
+if [ "${YOUTUBE_STREAM_KEY-}" ]; then
+  OUTPUT="$OUTPUT|[f=flv:select=\'a:0,v:1\']rtmp://a.rtmp.youtube.com/live2/$YOUTUBE_STREAM_KEY"
 fi
+for EXTRA_SERVER in ${EXTRA_SERVERS-}; do
+  OUTPUT="$OUTPUT|[f=flv:select=\'a:0,v:0\']rtmp://$EXTRA_SERVER/$APP/$STREAM_1"
+  OUTPUT="$OUTPUT|[f=flv:select=\'a:0,v:1\']rtmp://$EXTRA_SERVER/$APP/$STREAM_2"
+  OUTPUT="$OUTPUT|[f=flv:select=\'a:1,v:2\']rtmp://$EXTRA_SERVER/$APP/$STREAM_3"
+  OUTPUT="$OUTPUT|[f=flv:select=\'a:2,v:3\']rtmp://$EXTRA_SERVER/$APP/$STREAM_4"
+done
 
 FFMPEG="ffmpeg
 	-hide_banner
