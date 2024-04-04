@@ -146,7 +146,7 @@ ENCODE_VIDEO="
 	-map [30fps2] -b:v:1 2000k -maxrate:v:1 2000k -bufsize:v:1 2000k -g:v:1 $((1 * $FPS))
 	-map [15fps1] -b:v:2 1000k -maxrate:v:2 1000k -bufsize:v:2 2000k -g:v:2 $((1 * $FPS))
 	-map [15fps2] -b:v:3  500k -maxrate:v:3  600k -bufsize:v:3 1000k -g:v:3 $((1 * $FPS))
-	-map [30fps3]
+	-map [30fps3] -g:v:4 $((10 * $FPS))
 	"
 
 OUTPUT="-f tee -flags +global_header"
