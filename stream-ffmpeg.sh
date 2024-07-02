@@ -20,18 +20,21 @@ CODEC="-c:v libx264 -preset medium -tune:v zerolatency -profile:v baseline"
 # But this one would yield higher quality (at the expense of a bit more latency and CPU usage)
 #CODEC="-c:v libx264 -preset medium -profile:v main"
 
-# If we detect a seemingly working VAAPI setup, use it
-# (this has been written specifically for Intel QuickSync;
-# we tried to use h264_qsv but weren't able to get it to work)
+# Note that in theory, Intel GPUs should be supported by h264_qsv,
+# and AMD GPUs should be supported by h264_amf; but in practice,
+# I wasn't able to obtain good results with these. However, h264_vaapi
+# worked fine, so I'm using that for Intel and AMD encoders.
+
+# If we detect a seemingly working VAAPI setup, use it.
 if vainfo >/dev/null; then
-  CODECINFO="h264_vaapi (Intel GPU and other VAAPI platforms)"
+  CODECINFO="h264_vaapi (Generic VAAPI support; includes Intel and AMD GPUs)"
   HWINIT="-hwaccel vaapi -vaapi_device /dev/dri/renderD128"
-  CODEC="-c:v h264_vaapi -profile:v main -profile:v:4 high -qp:v:4 25"
+  CODEC="-c:v h264_vaapi -profile:v main -bf 0 -profile:v:4 high -qp:v:4 25"
   VIDEOFILTER=format=nv12,hwupload
 fi
 
 # If we detect an AMD GPU, use AMF (Advanced Media Framework)
-if lspci | grep -qw Renoir; then
+if lspci | grep -qw Radeon-DISABLED; then
   CODECINFO="CODEC: h264_amf (AMD GPU)"
   HWINIT=""
   VIDEOFILTER=format=yuv420p
@@ -91,7 +94,7 @@ if [ "$CARD_NUMBER" = "" ]; then
   echo "Could not find ALSA card $AUDIO_INPUT_NAME. Aborting."
   exit 1
 fi
-AUDIO_INPUT_MUSIC="-re -i Downloads/Sonnentanz.m4a"
+AUDIO_INPUT_MUSIC="-re -i $HOME/Dropbox/obs-assets/music/Sonnentanz.m4a"
 AUDIO_INPUT_PULSE="-f pulse -i alsa_input.usb-UC_MIC_ATR2USB-00.analog-stereo"
 AUDIO_INPUT_PULSE="-f pulse -i alsa_input.usb-DJI_Technology_Co.__Ltd._Wireless_Microphone_RX-00.analog-stereo"
 AUDIO_INPUT_ALSA_DEFAULT="-f alsa -i default"
@@ -132,8 +135,9 @@ STREAM_2=stream2
 STREAM_3=stream3
 STREAM_4=stream4
 
+# "-c:a aac" for mpeg4 audio, "-c:a libopus" for Opus (which is compatible with WebRTC)
 ENCODE_AUDIO="
-	-c:a aac
+	-c:a libopus
 	-map 0:a:0 -ac:a:0 1 -b:a:0 128k
 	-map 0:a:0 -ac:a:1 1 -b:a:1 64k
 	-map 0:a:0 -ac:a:2 1 -b:a:2 48k
@@ -158,18 +162,23 @@ mkdir -p recordings
 FILENAME=recordings/$(date +%Y-%m-%d_%H:%M:%S).mkv
 OUTPUT="$OUTPUT|[select=\'a:0,v:4\']$FILENAME"
 
-OUTPUT="$OUTPUT|[f=flv:select=\'a:0,v:0\']rtmp://$SERVER1/$APP/$STREAM_1"
-OUTPUT="$OUTPUT|[f=flv:select=\'a:0,v:1\']rtmp://$SERVER1/$APP/$STREAM_2"
-OUTPUT="$OUTPUT|[f=flv:select=\'a:1,v:2\']rtmp://$SERVER1/$APP/$STREAM_3"
-OUTPUT="$OUTPUT|[f=flv:select=\'a:2,v:3\']rtmp://$SERVER1/$APP/$STREAM_4"
+# For reference, this is what it looks like for RTMP ingest:
+#OUTPUT="$OUTPUT|[f=flv:select=\'a:0,v:0\']rtmp://$SERVER1/$APP/$STREAM_1"
+# But we're now using RTSP because it can carry more codecs:
+OUTPUT="$OUTPUT|[f=rtsp:rtsp_transport=tcp:select=\'a:0,v:0\']rtsp://$SERVER1:8554/$APP/$STREAM_1"
+OUTPUT="$OUTPUT|[f=rtsp:rtsp_transport=tcp:select=\'a:0,v:1\']rtsp://$SERVER1:8554/$APP/$STREAM_2"
+OUTPUT="$OUTPUT|[f=rtsp:rtsp_transport=tcp:select=\'a:1,v:2\']rtsp://$SERVER1:8554/$APP/$STREAM_3"
+OUTPUT="$OUTPUT|[f=rtsp:rtsp_transport=tcp:select=\'a:2,v:3\']rtsp://$SERVER1:8554/$APP/$STREAM_4"
 if [ "${YOUTUBE_STREAM_KEY-}" ]; then
+  # Note: this won't work unless we switch back to AAC / MP4 audio
+  # (because RTMP doesn't support Opus audio)
   OUTPUT="$OUTPUT|[f=flv:select=\'a:0,v:1\']rtmp://a.rtmp.youtube.com/live2/$YOUTUBE_STREAM_KEY"
 fi
 for EXTRA_SERVER in ${EXTRA_SERVERS-}; do
-  OUTPUT="$OUTPUT|[f=flv:select=\'a:0,v:0\']rtmp://$EXTRA_SERVER/$APP/$STREAM_1"
-  OUTPUT="$OUTPUT|[f=flv:select=\'a:0,v:1\']rtmp://$EXTRA_SERVER/$APP/$STREAM_2"
-  OUTPUT="$OUTPUT|[f=flv:select=\'a:1,v:2\']rtmp://$EXTRA_SERVER/$APP/$STREAM_3"
-  OUTPUT="$OUTPUT|[f=flv:select=\'a:2,v:3\']rtmp://$EXTRA_SERVER/$APP/$STREAM_4"
+  OUTPUT="$OUTPUT|[f=rtsp:rtsp_transport=tcp:select=\'a:0,v:0\']rtsp://$EXTRA_SERVER:8554/$APP/$STREAM_1"
+  OUTPUT="$OUTPUT|[f=rtsp:rtsp_transport=tcp:select=\'a:0,v:1\']rtsp://$EXTRA_SERVER:8554/$APP/$STREAM_2"
+  OUTPUT="$OUTPUT|[f=rtsp:rtsp_transport=tcp:select=\'a:1,v:2\']rtsp://$EXTRA_SERVER:8554/$APP/$STREAM_3"
+  OUTPUT="$OUTPUT|[f=rtsp:rtsp_transport=tcp:select=\'a:2,v:3\']rtsp://$EXTRA_SERVER:8554/$APP/$STREAM_4"
 done
 
 FFMPEG="ffmpeg
