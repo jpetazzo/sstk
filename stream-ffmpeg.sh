@@ -222,7 +222,6 @@ read
 
 $PULSE_OFF_CMD
 ffplay $AUDIO_INPUT
-read
 $PULSE_ON_CMD
 
 sep
