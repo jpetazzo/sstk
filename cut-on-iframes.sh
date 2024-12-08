@@ -65,10 +65,10 @@ set -ue
 . "./$CUESHEET"
 
 if [ "$REMOTE" ]; then
-  ssh $REMOTE mkdir -p portal.container.training/www/html/replay
-  ssh $REMOTE "[ -d replay ] || ln -s portal.container.training/www/html/replay"
+  ssh $REMOTE mkdir -p portal.container.training/www/replay
+  ssh $REMOTE "[ -d replay ] || ln -s portal.container.training/www/replay"
 
-  rsync -Pav *.mp4 $REMOTE:replay/
+  rsync $RSYNC_OPTIONS -Pav *.mp4 $REMOTE:replay/
 
   for F in *.mp4; do
     echo https://$REMOTE/replay/$F

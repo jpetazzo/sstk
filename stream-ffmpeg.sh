@@ -73,7 +73,7 @@ for CARD in /sys/class/sound/card*; do
   if grep -q "$AUDIO_INPUT_NAME" $CARD/id; then
     CARD_NUMBER=$(cat $CARD/number)
     echo "AUDIO: type=ALSA, id=$AUDIO_INPUT_NAME, number=$CARD_NUMBER"
-    AUDIO_INPUT_ALSA="-f alsa -ac 2 -i hw:$CARD_NUMBER,0"
+    AUDIO_INPUT_ALSA="-f alsa -i hw:$CARD_NUMBER,0"
     PULSE_CARD_NAME=$(pactl list short cards | grep $AUDIO_INPUT_NAME | cut -d"	" -f2)
     if [ "$PULSE_CARD_NAME" ]; then
       PULSE_OFF_CMD="pactl set-card-profile $PULSE_CARD_NAME off"
@@ -222,6 +222,7 @@ read
 
 $PULSE_OFF_CMD
 ffplay $AUDIO_INPUT
+read
 $PULSE_ON_CMD
 
 sep
